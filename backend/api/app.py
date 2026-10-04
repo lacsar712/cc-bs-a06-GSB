@@ -6,7 +6,15 @@ from passlib.context import CryptContext
 from sanic import Sanic
 from sanic.response import json as sanic_json
 
-from db import create_pool, ensure_schema, seed_if_empty
+from db import (
+    PASS_HIGH,
+    PASS_LOW,
+    create_pool,
+    ensure_schema,
+    get_band_config_async,
+    seed_if_empty,
+    update_band_config_async,
+)
 
 SECRET = os.environ.get("JWT_SECRET", "bridge-strain-dev-secret")
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -50,6 +58,41 @@ def _iso(dt) -> str | None:
     if dt is None:
         return None
     return dt.isoformat()
+
+
+def _reading_out(r) -> dict:
+    """读数序列化：结论、警戒标志与领单瞬间的黄带快照一起下发。
+
+    前端总览表与详情页一律依据这里的 verdict/warning 着色与措辞，保证
+    “同色同字”；band_* 快照用于详情脚注，口径与判定完全一致。
+    """
+    return {
+        "id": r["id"],
+        "span_code": r["span_code"],
+        "microstrain": r["microstrain"],
+        "verdict": r["verdict"],
+        "warning": bool(r["warning"]) if r["warning"] is not None else False,
+        "reason": r["reason"],
+        "status": r["status"],
+        "created_by": r["created_by"],
+        "created_at": _iso(r["created_at"]),
+        "processed_at": _iso(r["processed_at"]),
+        "band_enabled": r["band_enabled"],
+        "band_inner": r["band_inner"],
+        "band_outer": r["band_outer"],
+    }
+
+
+def _band_out(cfg) -> dict:
+    return {
+        "enabled": bool(cfg["enabled"]),
+        "inner_edge": cfg["inner_edge"],
+        "outer_edge": cfg["outer_edge"],
+        "pass_low": PASS_LOW,
+        "pass_high": PASS_HIGH,
+        "updated_by": cfg["updated_by"],
+        "updated_at": _iso(cfg["updated_at"]),
+    }
 
 
 @app.before_server_start
@@ -100,29 +143,15 @@ async def list_readings(request):
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, span_code, microstrain, verdict, reason, status,
-                       created_by, created_at, processed_at
+                SELECT id, span_code, microstrain, verdict, warning, reason, status,
+                       created_by, created_at, processed_at,
+                       band_enabled, band_inner, band_outer
                 FROM strain_readings
                 ORDER BY id DESC
                 """
             )
             rows = await cur.fetchall()
-    out = []
-    for r in rows:
-        out.append(
-            {
-                "id": r["id"],
-                "span_code": r["span_code"],
-                "microstrain": r["microstrain"],
-                "verdict": r["verdict"],
-                "reason": r["reason"],
-                "status": r["status"],
-                "created_by": r["created_by"],
-                "created_at": _iso(r["created_at"]),
-                "processed_at": _iso(r["processed_at"]),
-            }
-        )
-    return sanic_json(out)
+    return sanic_json([_reading_out(r) for r in rows])
 
 
 @app.post("/api/readings")
@@ -148,26 +177,110 @@ async def create_reading(request):
                 """
                 INSERT INTO strain_readings (span_code, microstrain, status, created_by, created_at)
                 VALUES (%s, %s, 'pending', %s, now())
-                RETURNING id, span_code, microstrain, verdict, reason, status,
-                          created_by, created_at, processed_at
+                RETURNING id, span_code, microstrain, verdict, warning, reason, status,
+                          created_by, created_at, processed_at,
+                          band_enabled, band_inner, band_outer
                 """,
                 (span_code, microstrain, user["username"]),
             )
             row = await cur.fetchone()
         await conn.commit()
 
-    return sanic_json(
+    out = _reading_out(row)
+    out["message"] = "已入队，后台工人将按当前黄带边界认领并判定"
+    return sanic_json(out, status=201)
+
+
+@app.get("/api/warning-band")
+async def get_warning_band(request):
+    if not _require_user(request):
+        return sanic_json({"detail": "未登录"}, status=401)
+    pool = request.app.ctx.pool
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            cfg = await get_band_config_async(cur)
+    return sanic_json(_band_out(cfg))
+
+
+@app.put("/api/warning-band")
+async def put_warning_band(request):
+    user = _require_user(request)
+    if not user:
+        return sanic_json({"detail": "未登录"}, status=401)
+    if user["role"] != "writer":
+        # 复核侧只能看不能改黄带。
+        return sanic_json({"detail": "仅测量员可修改警戒黄带"}, status=403)
+
+    body = request.json or {}
+    enabled = bool(body.get("enabled", True))
+    try:
+        inner_edge = float(body.get("inner_edge"))
+        outer_edge = float(body.get("outer_edge"))
+    except (TypeError, ValueError):
+        return sanic_json({"detail": "黄带内沿、外沿必须是数字"}, status=400)
+
+    if not (PASS_LOW <= inner_edge <= outer_edge <= PASS_HIGH):
+        return sanic_json(
+            {
+                "detail": (
+                    f"黄带须落在合格带 {_num(PASS_LOW)}～{_num(PASS_HIGH)} με 内，"
+                    "且内沿不大于外沿"
+                )
+            },
+            status=400,
+        )
+
+    note = body.get("note")
+    note = str(note).strip() if note is not None else None
+    note = note or None
+
+    pool = request.app.ctx.pool
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            cfg = await update_band_config_async(
+                cur,
+                enabled=enabled,
+                inner_edge=inner_edge,
+                outer_edge=outer_edge,
+                changed_by=user["username"],
+                note=note,
+            )
+        await conn.commit()
+    return sanic_json(_band_out(cfg))
+
+
+@app.get("/api/warning-band/history")
+async def warning_band_history(request):
+    if not _require_user(request):
+        return sanic_json({"detail": "未登录"}, status=401)
+    pool = request.app.ctx.pool
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, enabled, inner_edge, outer_edge,
+                       changed_by, changed_at, note
+                FROM warning_band_history
+                ORDER BY id DESC
+                LIMIT 100
+                """
+            )
+            rows = await cur.fetchall()
+    out = [
         {
-            "id": row["id"],
-            "span_code": row["span_code"],
-            "microstrain": row["microstrain"],
-            "verdict": row["verdict"],
-            "reason": row["reason"],
-            "status": row["status"],
-            "created_by": row["created_by"],
-            "created_at": _iso(row["created_at"]),
-            "processed_at": None,
-            "message": "已入队，后台工人将认领并判定",
-        },
-        status=201,
-    )
+            "id": r["id"],
+            "enabled": bool(r["enabled"]),
+            "inner_edge": float(r["inner_edge"]),
+            "outer_edge": float(r["outer_edge"]),
+            "changed_by": r["changed_by"],
+            "changed_at": _iso(r["changed_at"]),
+            "note": r["note"],
+        }
+        for r in rows
+    ]
+    return sanic_json(out)
+
+
+def _num(x: float) -> str:
+    f = float(x)
+    return str(int(f)) if f.is_integer() else f"{f:g}"

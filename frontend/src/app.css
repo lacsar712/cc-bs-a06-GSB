@@ -129,3 +129,98 @@ th {
   background: #fff8e1;
   color: #f57f17;
 }
+
+/* 警戒黄带：合格但须警戒。总览与详情共用此类，同色同字。 */
+.tag.warn {
+  background: #fff3c4;
+  color: #8a6100;
+  border: 1px solid #e6c34d;
+}
+
+tr.row-warn {
+  background: #fffdf2;
+}
+
+tr.row-warn td {
+  border-color: #f0e2a8;
+}
+
+.topactions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  white-space: nowrap;
+}
+
+button.nav-active {
+  background: #b8860b;
+}
+
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+label.check input {
+  min-width: 0;
+}
+
+.swatches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.swatch {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.swatch-range {
+  color: #555;
+  font-size: 0.88rem;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4rem 1rem;
+  z-index: 50;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.25rem;
+  width: 100%;
+  max-width: 600px;
+  border: 1px solid #ccc;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.detail-table th {
+  width: 110px;
+  background: #f6f7f9;
+}
+
+.footnote {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.75rem;
+  background: #fffdf2;
+  border: 1px solid #f0e2a8;
+  border-radius: 4px;
+  color: #8a6100;
+  font-size: 0.85rem;
+}
