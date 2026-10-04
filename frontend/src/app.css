@@ -125,7 +125,123 @@ th {
   color: #c62828;
 }
 
+/* 警戒黄带标签：总览列表与读数详情共用此类，同色同字 */
+.tag.warn {
+  background: #ffecb3;
+  color: #8a5a00;
+  border: 1px solid #ffca28;
+}
+
 .tag.wait {
+  background: #eceff1;
+  color: #546e7a;
+}
+
+/* 落入黄带的行：淡黄底，与警戒标签同源 */
+tr.row-warn {
+  background: #fffdf2;
+}
+
+tr.row-warn:hover {
   background: #fff8e1;
-  color: #f57f17;
+}
+
+/* 顶栏导航与警戒带入口 */
+.nav {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+
+.navlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  color: #1565c0;
+  font-size: 0.95rem;
+  padding: 0.2rem 0.1rem;
+  border-bottom: 2px solid transparent;
+}
+
+.navlink.active {
+  border-bottom-color: #1565c0;
+  font-weight: 600;
+}
+
+.band-dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: #fbc02d;
+  border: 1px solid #f57f17;
+}
+
+.linky {
+  color: #1565c0;
+  text-decoration: none;
+}
+
+.linky:hover {
+  text-decoration: underline;
+}
+
+.lock {
+  color: #555;
+  margin: 0;
+}
+
+.lockico {
+  margin-right: 0.35rem;
+}
+
+/* 样例色块 */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.swatch {
+  border: 1px solid #e0d4a8;
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  text-align: center;
+  min-width: 120px;
+  background: #fffef9;
+}
+
+.swatch-v {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.swatch-tag {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: #666;
+}
+
+/* 详情键值表 */
+table.kv th {
+  width: 130px;
+  background: #f7f9fa;
+  white-space: nowrap;
+}
+
+/* 详情脚注：黄带边界说明 */
+.footnote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: #fffdf2;
+  border: 1px solid #ffe082;
+  border-left: 4px solid #fbc02d;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.footnote-title {
+  font-weight: 600;
+  color: #8a5a00;
 }
